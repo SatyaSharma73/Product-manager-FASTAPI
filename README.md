@@ -8,6 +8,7 @@
 [![React](https://img.shields.io/badge/React-19.x-61DAFB?style=for-the-badge&logo=react&logoColor=black)](https://react.dev/)
 [![MySQL](https://img.shields.io/badge/MySQL-8.0+-4479A1?style=for-the-badge&logo=mysql&logoColor=white)](https://www.mysql.com/)
 [![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org/)
+[![i18n](https://img.shields.io/badge/i18n-EN%20%7C%20HI%20%7C%20FR%20%7C%20ES-blueviolet?style=for-the-badge)](https://react.i18next.com/)
 [![SQLAlchemy](https://img.shields.io/badge/SQLAlchemy-ORM-red?style=for-the-badge)](https://www.sqlalchemy.org/)
 [![Axios](https://img.shields.io/badge/Axios-HTTP-5A29E4?style=for-the-badge)](https://axios-http.com/)
 
@@ -29,6 +30,9 @@
 - [Running the App](#-running-the-app)
 - [UI Walkthrough](#-ui-walkthrough)
 - [Screenshots](#-screenshots)
+- [Internationalization](#-internationalization)
+- [Excel Import & Export](#-excel-import--export)
+- [Bug Fixes](#-bug-fixes)
 
 ---
 
@@ -36,7 +40,7 @@
 
 **Product Manager** is a full-stack CRUD application that lets you manage a product catalogue through a clean, modern React dashboard. The backend is powered by **FastAPI** with a **MySQL** database via **SQLAlchemy ORM**, and the frontend is a **Create React App** project that communicates with the API over HTTP.
 
-Each product has a name, description, price, and active/inactive status. The dashboard gives you real-time statistics, powerful filtering, sorting, inline editing, bulk operations, CSV export, and a dark mode — all in one place.
+Each product has a name, description, price, and active/inactive status. The dashboard gives you real-time statistics, powerful filtering, sorting, inline editing, bulk operations, Excel import/export, a language switcher with 4 languages, and dark mode — all in one place.
 
 ---
 
@@ -49,8 +53,13 @@ Each product has a name, description, price, and active/inactive status. The das
 | **Validation** | Pydantic v2 | Request / response schemas |
 | **Database** | MySQL 8+ | Persistent data storage |
 | **DB Driver** | PyMySQL | Python → MySQL connector |
+| **Excel (backend)** | openpyxl | Parse uploaded `.xlsx` files, generate template |
+| **File upload** | python-multipart | Handle `multipart/form-data` in FastAPI |
 | **Frontend** | React 19 (CRA) | UI framework |
 | **HTTP Client** | Axios | API calls from React |
+| **Excel (frontend)** | SheetJS (`xlsx`) | Client-side Excel export |
+| **i18n** | react-i18next + i18next | Internationalisation, 4 languages |
+| **Lang detection** | i18next-browser-languagedetector | Auto-detect language from browser / localStorage |
 | **Styling** | Pure CSS (CSS Variables) | Theming, dark mode |
 | **Dev Runner** | concurrently | Run API + UI with one command |
 
@@ -62,6 +71,7 @@ Each product has a name, description, price, and active/inactive status. The das
 - **Live stats sidebar** — Total, Active, Inactive counts + Average Price + Total Catalogue Value
 - **Clickable stat cards** — click Total / Active / Inactive to filter the table instantly
 - **Dark mode** — toggle between light and dark themes; preference persists across sessions
+- **Language switcher** — switch between 🇬🇧 English, 🇮🇳 Hindi, 🇫🇷 French, 🇪🇸 Spanish from the navbar
 
 ### Products Table
 | Feature | Details |
@@ -74,14 +84,25 @@ Each product has a name, description, price, and active/inactive status. The das
 | **Hover preview** | Hover over a product name to see a floating card with full details |
 | **Copy UUID** | Click any Product ID cell to copy it to clipboard |
 | **Row selection** | Checkbox per row + select-all for bulk operations |
-| **Bulk delete** | Select multiple products and delete them all at once |
-| **CSV export** | Download all visible (filtered) rows as a `.csv` file |
+| **Bulk delete** | Select multiple products and delete them in one click |
+| **Export to Excel** | Download all visible (filtered) rows as `.xlsx` — import-compatible format |
+| **Export selected** | Download only the checked rows as `.xlsx` |
 | **Edit** | Open a pre-filled modal to update any product field |
 | **Delete** | Delete a single product with a confirmation modal |
 
+### Import Excel
+| Step | Details |
+|---|---|
+| **Drop zone** | Drag & drop or click-to-browse for `.xlsx` / `.xls` files |
+| **Preview** | See all rows parsed from the file before any data is written |
+| **Row selection** | Check/uncheck individual rows; invalid rows are disabled automatically |
+| **Validation** | Backend validates name and price; invalid rows are highlighted with a reason |
+| **Selective import** | Only the rows you select are inserted into the database |
+| **Template download** | Download a pre-formatted `.xlsx` template to fill in |
+
 ### Other Pages
 - **Add Product** — Form to create a new product with name, description, price, and status
-- **Find by ID** — Look up any product instantly by its UUID
+- **Find by ID** — Look up any product instantly by its UUID with specific error messages for 404 / invalid format / server down
 
 ---
 
@@ -90,10 +111,11 @@ Each product has a name, description, price, and active/inactive status. The das
 ```
 FastAPI/
 │
-├── main.py                  # FastAPI app — all 5 endpoints
+├── main.py                  # FastAPI app — 9 endpoints (CRUD + import + export)
 ├── database.py              # SQLAlchemy engine, session, Base
 ├── db_models.py             # ORM model — ProductORM table
-├── model.py                 # Pydantic schemas (Product, ProductCreate, ProductUpdate)
+├── model.py                 # Pydantic schemas (Product, ProductCreate,
+│                            #   ProductUpdate, ProductPreviewRow, PreviewResponse)
 │
 ├── .env                     # DB credentials (not committed)
 ├── .gitignore
@@ -106,22 +128,32 @@ FastAPI/
     ├── public/
     │   └── index.html
     └── src/
-        ├── App.js           # Root component — tabs, theme, sidebar stats
-        ├── App.css          # All styles with CSS variables (light + dark)
+        ├── App.js           # Root — tabs, theme, language switcher, sidebar stats
+        ├── App.css          # All styles: CSS variables, dark mode, i18n switcher
+        ├── index.js         # Entry point — imports i18n before React renders
         ├── index.css        # Global reset + font
         │
+        ├── i18n/
+        │   ├── index.js              # i18next config, language detection
+        │   └── locales/
+        │       ├── en.json           # English translations
+        │       ├── hi.json           # Hindi translations
+        │       ├── fr.json           # French translations
+        │       └── es.json           # Spanish translations
+        │
         ├── api/
-        │   └── productApi.js        # Axios wrapper — all 5 API calls
+        │   └── productApi.js         # Axios wrapper — all API calls
         │
         ├── utils/
-        │   └── format.js            # Currency (INR) + date formatters
+        │   └── format.js             # Currency (INR) + date formatters
         │
         └── components/
-            ├── ProductsTab.js       # Main table with all features
-            ├── AddProductTab.js     # Add product form
-            ├── FindByIdTab.js       # UUID lookup page
-            ├── EditModal.js         # Edit product modal
-            └── DeleteModal.js       # Delete confirmation modal
+            ├── ProductsTab.js        # Main table with all features
+            ├── AddProductTab.js      # Add product form
+            ├── ImportTab.js          # Excel import: drop → preview → import
+            ├── FindByIdTab.js        # UUID lookup page
+            ├── EditModal.js          # Edit product modal
+            └── DeleteModal.js        # Delete confirmation modal
 ```
 
 ---
@@ -136,11 +168,13 @@ FastAPI/
 │   │                  React Frontend                      │  │
 │   │                 localhost:3000                       │  │
 │   │                                                     │  │
-│   │  App.js ──► ProductsTab ──► EditModal               │  │
-│   │          ├─► AddProductTab   DeleteModal            │  │
+│   │  App.js ──► ProductsTab  ──► EditModal              │  │
+│   │          ├─► AddProductTab    DeleteModal           │  │
+│   │          ├─► ImportTab                              │  │
 │   │          └─► FindByIdTab                            │  │
 │   │                   │                                 │  │
-│   │            productApi.js (Axios)                    │  │
+│   │       productApi.js (Axios)  ·  SheetJS (export)   │  │
+│   │       react-i18next (i18n)                         │  │
 │   └───────────────────┼─────────────────────────────────┘  │
 └───────────────────────┼─────────────────────────────────────┘
                         │ HTTP (proxied in dev)
@@ -150,13 +184,17 @@ FastAPI/
 │                  localhost:8000                              │
 │                                                             │
 │   main.py                                                   │
-│   ├── GET  /getallproducts                                  │
-│   ├── GET  /getproductbyid/{id}                             │
-│   ├── POST /addproduct                                       │
-│   ├── PUT  /updateproduct/{id}                              │
-│   └── DELETE /deleteproduct/{id}                            │
+│   ├── GET    /getallproducts                                │
+│   ├── GET    /getproductbyid/{id}                           │
+│   ├── POST   /addproduct                                    │
+│   ├── PUT    /updateproduct/{id}                            │
+│   ├── DELETE /deleteproduct/{id}                            │
+│   ├── GET    /importtemplate      ← download .xlsx template │
+│   ├── POST   /previewimport       ← parse + validate file   │
+│   ├── POST   /importselected      ← bulk insert chosen rows │
+│   └── POST   /importproducts      ← legacy file import      │
 │                   │                                         │
-│           SQLAlchemy ORM                                     │
+│      SQLAlchemy ORM · openpyxl · python-multipart           │
 │            database.py                                      │
 └───────────────────┼─────────────────────────────────────────┘
                     │ PyMySQL
@@ -285,6 +323,66 @@ Permanently delete a product.
 
 ---
 
+### `GET /importtemplate`
+Download a pre-formatted `.xlsx` template with correct column headers, ready to fill in and re-upload.
+
+**Response `200`** — `products_template.xlsx` (binary stream)
+
+---
+
+### `POST /previewimport`
+Parse and validate an uploaded Excel file. **No data is written to the database.** Returns a preview of every row with validity flags.
+
+**Request** — `multipart/form-data` with field `file` (`.xlsx` or `.xls`)
+
+**Response `200`**
+```json
+{
+  "total": 5,
+  "valid_count": 4,
+  "rows": [
+    {
+      "row_num": 2,
+      "name": "Wireless Headphones",
+      "description": "Noise cancelling",
+      "price": 3499.99,
+      "is_active": true,
+      "valid": true,
+      "reason": null
+    },
+    {
+      "row_num": 3,
+      "name": null,
+      "description": null,
+      "price": null,
+      "is_active": true,
+      "valid": false,
+      "reason": "Name is required"
+    }
+  ]
+}
+```
+
+---
+
+### `POST /importselected`
+Bulk insert a list of products chosen from the preview. Accepts only pre-validated rows sent as JSON.
+
+**Request Body**
+```json
+[
+  { "name": "Headphones", "description": "...", "price": 3499.99, "is_active": true },
+  { "name": "Keyboard",   "description": null,  "price": 1299.00, "is_active": true }
+]
+```
+
+**Response `200`**
+```json
+{ "imported": 2 }
+```
+
+---
+
 ## 🚀 Getting Started
 
 ### Prerequisites
@@ -301,8 +399,8 @@ Make sure you have the following installed:
 ### 1. Clone the repository
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/fastapi-product-manager.git
-cd fastapi-product-manager
+git clone https://github.com/SatyaSharma73/Product-manager-FASTAPI.git
+cd Product-manager-FASTAPI
 ```
 
 ---
@@ -333,9 +431,11 @@ npm install
 
 # Install React dependencies
 cd frontend
-npm install
+npm install --legacy-peer-deps
 cd ..
 ```
+
+> `--legacy-peer-deps` is required because `react-i18next` and `i18next` have a peer dependency on TypeScript ≥ 5, while Create React App ships TypeScript 4.
 
 ---
 
@@ -412,34 +512,35 @@ npm start
 ### Dashboard Layout
 
 ```
-┌──────────────────────────────────────────────────────────────┐
-│  navbar:  PM  Product Manager  ·  FastAPI · MySQL  [🌙/☀️]  │
-├────────────────────────────────────────┬─────────────────────┤
-│                                        │  ┌───────────────┐  │
-│  [Active Products] [Add Product]       │  │ 🟦 Total   12 │  │
-│  [Find by ID]                          │  ├───────────────┤  │
-│                                        │  │ ✅ Active   9 │  │
-│  ┌──────────────────────────────────┐  │  ├───────────────┤  │
-│  │  Products  9  [search...]  From  │  │  │ ❌ Inactive 3 │  │
-│  │  [date] To [date] Min₹ Max₹     │  │  ├───────────────┤  │
-│  │  [Export CSV]  [Refresh]         │  │  │ ₹ Avg Price   │  │
-│  ├──┬──┬────────┬──────┬──────┬────┤  │  ├───────────────┤  │
-│  │☐ │# │ID      │Name  │Price │... │  │  │ 💼 Total Val  │  │
-│  ├──┼──┼────────┼──────┼──────┼────┤  │  └───────────────┘  │
-│  │  │  │        │      │      │    │  │                      │
-│  └──┴──┴────────┴──────┴──────┴────┘  │                      │
-└────────────────────────────────────────┴─────────────────────┘
+┌──────────────────────────────────────────────────────────────────┐
+│  PM  Product Manager · FastAPI · MySQL  [🌐 EN▾]  [🌙]          │
+├──────────────────────────────────────────────┬───────────────────┤
+│                                              │  ┌─────────────┐  │
+│  [Active Products][Add Product]              │  │ 🟦 Total 12 │  │
+│  [Import Excel]  [Find by ID]                │  ├─────────────┤  │
+│                                              │  │ ✅ Active 9 │  │
+│  ┌────────────────────────────────────────┐  │  ├─────────────┤  │
+│  │ Products 9  [search…] From[date]To[date│  │  │ ❌ Inact. 3 │  │
+│  │ Min₹[   ] Max₹[   ]  [Export Excel]   │  │  ├─────────────┤  │
+│  │ [Refresh]                              │  │  │ ₹ Avg Price │  │
+│  ├──┬──┬────────┬──────────┬──────┬──────┤  │  ├─────────────┤  │
+│  │☐ │# │ID      │Name      │Price │...   │  │  │ 💼 Total Val│  │
+│  ├──┼──┼────────┼──────────┼──────┼──────┤  │  └─────────────┘  │
+│  │  │  │        │          │      │      │  │                    │
+│  └──┴──┴────────┴──────────┴──────┴──────┘  │                    │
+└──────────────────────────────────────────────┴───────────────────┘
 ```
 
 ### Tab Pages
 
 | Tab | Description |
 |---|---|
-| **Active Products** | Shows only `is_active = true` products |
+| **Active Products** | Shows only `is_active = true` products with full filter/sort/export |
 | **Add Product** | Form with name, description, price, status fields |
+| **Import Excel** | 3-step flow: drop file → preview rows → import selected |
 | **Find by ID** | Paste a UUID to fetch and display a single product |
-| *(via sidebar)* **Total Products** | Shows all products (active + inactive) |
-| *(via sidebar)* **Inactive** | Shows only `is_active = false` products |
+| *(sidebar click)* **Total Products** | Shows all products (active + inactive) |
+| *(sidebar click)* **Inactive** | Shows only `is_active = false` products |
 
 ---
 
@@ -466,6 +567,101 @@ npm start
 
 ---
 
+## 🌍 Internationalization
+
+The entire UI is fully translated into **4 languages**. Language selection is persisted in `localStorage` and auto-detected from the browser on first visit.
+
+| Flag | Language | Code | Native name |
+|---|---|---|---|
+| 🇬🇧 | English | `en` | English |
+| 🇮🇳 | Hindi | `hi` | हिन्दी |
+| 🇫🇷 | French | `fr` | Français |
+| 🇪🇸 | Spanish | `es` | Español |
+
+### How it works
+
+```
+frontend/src/i18n/
+├── index.js              # Configures i18next with localStorage detection
+└── locales/
+    ├── en.json           # ~190 keys: nav, tabs, stats, table, modals, import…
+    ├── hi.json
+    ├── fr.json
+    └── es.json
+```
+
+- Every string in the app calls `t('key')` from `useTranslation()`
+- Pluralisation uses `_one` / `_other` suffixes (e.g. `"1 product selected"` vs `"3 products selected"`)
+- The **LangSwitcher** in the navbar shows a real country flag image (from `flagcdn.com`), the language name in full, and a code badge — no broken emoji on Windows
+
+### Packages
+
+```bash
+npm install react-i18next i18next i18next-browser-languagedetector --legacy-peer-deps
+```
+
+---
+
+## 📊 Excel Import & Export
+
+### Export to Excel
+Click **Export Excel** in the Products table toolbar to download all currently visible (filtered + sorted) rows as `products.xlsx`.  
+Select specific rows first to use **Export Excel (n)** from the bulk action bar — exports only those rows.
+
+The exported file uses **import-compatible column headers** (`name`, `description`, `price`, `is_active`) so it can be re-uploaded directly.
+
+### Import from Excel
+
+The import tab follows a **3-step flow** with no risk of accidental data insertion:
+
+```
+Step 1 — Drop Zone          Step 2 — Preview Table      Step 3 — Done
+┌────────────────────┐      ┌──────────────────────┐    ┌──────────────┐
+│  Drop .xlsx here   │      │ ☑ Row 2  Headphones  │    │ ✅ Import    │
+│  or click to browse│  ──► │ ☑ Row 3  Keyboard    │ ──►│    complete! │
+│  [Download Template│      │ ✗ Row 4  (no name)   │    │ 3 products   │
+│   ]                │      │ ☑ Row 5  Mouse       │    │ added.       │
+└────────────────────┘      └──────────────────────┘    └──────────────┘
+                             [Import Selected (2)]
+```
+
+1. **Upload** — drag & drop or browse for an `.xlsx` / `.xls` file
+2. **Preview** — backend parses the file and returns each row with a `valid` flag; no data is saved yet
+3. **Select & Import** — check the rows you want; click **Import Selected** to insert only those rows
+
+#### Required Excel columns
+
+| Column | Required | Notes |
+|---|---|---|
+| `name` | ✅ | Product name, max 200 chars |
+| `price` | ✅ | Positive number |
+| `description` | ❌ | Optional |
+| `is_active` | ❌ | `TRUE` / `FALSE`, defaults to `TRUE` |
+
+> Download the **template** from the Import tab to get a correctly formatted starter file.
+
+### Backend packages
+
+```bash
+pip install openpyxl python-multipart
+```
+
+---
+
+## 🐛 Bug Fixes
+
+The following bugs were identified and fixed during development:
+
+| # | File | Severity | Issue | Fix |
+|---|---|---|---|---|
+| 1 | `EditModal.js` | 🔴 Critical | Spinner stuck forever after a failed save — `setLoading(false)` was only in `catch`, not `finally` | Moved `setLoading(false)` to `finally` block |
+| 2 | `DeleteModal.js` | 🔴 Critical | Same stuck-spinner issue as EditModal | Same `finally` block fix |
+| 3 | `FindByIdTab.js` | 🟡 Medium | All errors showed the same generic message regardless of HTTP status | Added UUID regex pre-validation + specific messages for 404, 422, and network errors |
+| 4 | `ImportTab.js` | 🟡 Medium | Uploading an empty Excel file (header row only) showed a blank preview with no feedback | Added `rows.length === 0` guard before entering preview step |
+| 5 | `ProductsTab.js` | 🟡 Medium | Typing non-numeric characters in the price filter caused `NaN` comparison errors | Added `!isNaN(parseFloat(value))` guard before price comparisons |
+
+---
+
 ## 📦 Python Dependencies
 
 ```
@@ -475,6 +671,8 @@ sqlalchemy
 pymysql
 pydantic
 python-dotenv
+openpyxl
+python-multipart
 ```
 
 Generate / update `requirements.txt`:
@@ -489,6 +687,7 @@ pip freeze > requirements.txt
 - `.env` is excluded from git via `.gitignore` — never expose database credentials
 - CORS is configured to only allow `http://localhost:3000` — update for production deployments
 - All UUIDs are generated server-side with `uuid4()` — no sequential IDs exposed
+- Uploaded Excel files are parsed in-memory — no files are written to disk on the server
 
 ---
 
@@ -500,6 +699,8 @@ pip freeze > requirements.txt
 - [ ] Product categories / tags
 - [ ] Deploy to cloud (Railway, Render, Vercel)
 - [ ] Unit & integration tests
+- [ ] More languages (German, Japanese, Arabic + RTL support)
+- [ ] PDF export
 
 ---
 
@@ -511,5 +712,5 @@ Cognizant Technology Solutions
 ---
 
 <div align="center">
-  <sub>Built with FastAPI · React · MySQL</sub>
+  <sub>Built with FastAPI · React · MySQL · i18next · SheetJS</sub>
 </div>
