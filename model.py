@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import Optional
+from typing import Optional, List
 from uuid import UUID
 from datetime import datetime
 
@@ -27,3 +27,19 @@ class ProductUpdate(BaseModel):
     description: Optional[str] = Field(None, max_length=1000)
     price: Optional[float] = Field(None, gt=0)
     is_active: Optional[bool] = None
+
+
+class ProductPreviewRow(BaseModel):
+    row_num: int
+    name: str
+    description: Optional[str] = None
+    price: Optional[float] = None
+    is_active: bool = True
+    valid: bool
+    reason: Optional[str] = None
+
+
+class PreviewResponse(BaseModel):
+    total: int
+    valid_count: int
+    rows: List[ProductPreviewRow]
