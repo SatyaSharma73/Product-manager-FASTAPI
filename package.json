@@ -1,0 +1,10 @@
+{
+  "name": "product-manager",
+  "version": "1.0.0",
+  "scripts": {
+    "dev": "concurrently --names \"API,UI\" --prefix-colors \"cyan,magenta\" \"myenv\\Scripts\\uvicorn main:app --reload\" \"npm start --prefix frontend\""
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}

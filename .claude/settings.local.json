@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(Get-ChildItem \"C:\\\\Users\\\\2153940\\\\OneDrive - Cognizant\\\\Desktop\\\\FastAPI\" -Recurse -Exclude node_modules | Where-Object { -not $_.FullName.Contains\\('node_modules'\\) } | Select-Object FullName)",
+      "PowerShell(& \"C:\\\\Users\\\\2153940\\\\OneDrive - Cognizant\\\\Desktop\\\\FastAPI\\\\myenv\\\\Scripts\\\\pip.exe\" list 2>&1)"
+    ]
+  }
+}
